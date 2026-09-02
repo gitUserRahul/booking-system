@@ -29,7 +29,7 @@ if (isMockMode) {
 export function setupMockApi() {
   const mock = new MockAdapter(api, { delayResponse: 400 });
 
-  // Return a single booking by id
+  // single booking by id
   mock.onGet(/\/bookings\/[^/]+\/?$/).reply((config) => {
     const cleanUrl = (config.url ?? "").split("?")[0].replace(/\/$/, "");
     const id = cleanUrl.split("/").pop();
@@ -37,11 +37,14 @@ export function setupMockApi() {
     return item ? [200, item] : [404, { error: `Booking ${id} not found` }];
   });
 
-  // Return all bookings (useful for verifying created bookings in the UI)
+  // get for all booking
   mock.onGet(/\/bookings\/?$/).reply(() => [200, bookings]);
 
+  
+  //get all services
   mock.onGet("/services").reply(200, serviceItems);
 
+  // get service availability for a specific service
   mock.onGet(/\/services\/[^/]+\/availability/).reply((config) => {
     const [path, queryString] = (config.url ?? "").split("?");
     const cleanPath = path.replace(/\/$/, "");
@@ -75,6 +78,7 @@ export function setupMockApi() {
     ];
   });
 
+  //get single service by id
   mock.onGet(/\/services\/.+/).reply((config) => {
     // Clean query strings and trailing slashes
     const cleanUrl = (config.url ?? "").split("?")[0].replace(/\/$/, "");
@@ -85,6 +89,7 @@ export function setupMockApi() {
     return item ? [200, item] : [404, { error: `Service ${id} not found` }];
   });
 
+  //post booking
   mock.onPost(/\/bookings\/?$/).reply((config) => {
     const payload = config.data ? JSON.parse(config.data) : {};
     const {

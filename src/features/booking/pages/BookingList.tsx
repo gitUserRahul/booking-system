@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useGetBookings } from "../api/useGetBookings";
+import { getLocalBookings } from '@/shared/utils/localStorageBookings';
 
 const BookingList = () => {
   const { data: bookings, isLoading, isError, error } = useGetBookings();
@@ -12,14 +13,19 @@ const BookingList = () => {
         Failed to load bookings: {String(error)}
       </p>
     );
-  if (!bookings || bookings.length === 0)
+  const local = getLocalBookings();
+  const displayed = bookings && bookings.length
+    ? bookings.concat(local.filter((l: any) => !bookings.find((b: any) => b.id === l.id)))
+    : local;
+
+  if (!displayed || displayed.length === 0)
     return <p className="p-4 text-center">You have no bookings yet.</p>;
 
   return (
     <div className="page max-w-3xl w-full mx-auto p-4 space-y-4">
       <h1 className="text-2xl font-bold">My Bookings</h1>
       <ul className="space-y-3">
-        {bookings.map((bookingItem: any) => (
+        {displayed.map((bookingItem: any) => (
           <li key={bookingItem.id} className="p-4 rounded border bg-white">
             <div className="flex justify-between items-start w-full">
               <div>

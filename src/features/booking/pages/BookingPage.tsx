@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useServiceAvailability } from "../../services/api/useServiceAvailability";
 import { useServiceItem } from "../../services/api/useServiceItem";
 import { useCreateBooking } from "../api/useCreateBooking";
+import { addLocalBooking } from '@/shared/utils/localStorageBookings';
 import { useNavigate } from 'react-router-dom';
 
 const BookingPage = () => {
@@ -39,6 +40,12 @@ const BookingPage = () => {
       {
         onSuccess: (booking) => {
           console.log("Booking created", booking);
+          // save a copy locally for offline/dev convenience
+          try {
+            addLocalBooking(booking);
+          } catch (e) {
+            // ignore errors
+          }
           // navigate to booking details page
           try {
             const bookingId = booking?.id;
