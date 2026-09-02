@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useServiceAvailability } from "../../services/api/useServiceAvailability";
 import { useServiceItem } from "../../services/api/useServiceItem";
 import { useCreateBooking } from "../api/useCreateBooking";
+import { useNavigate } from 'react-router-dom';
 
 const BookingPage = () => {
   const [selectedDate, setSelectedDate] = useState(null);
@@ -19,6 +20,7 @@ const BookingPage = () => {
 
   const { data: serviceItem } = useServiceItem(id ?? "");
   const createBooking = useCreateBooking();
+  const navigate = useNavigate();
 
   const handleConfirm = () => {
     if (!id || !selectedDate || !selectedSlot) return;
@@ -37,6 +39,13 @@ const BookingPage = () => {
       {
         onSuccess: (booking) => {
           console.log("Booking created", booking);
+          // navigate to booking details page
+          try {
+            const bookingId = booking?.id;
+            if (bookingId) navigate(`/bookings/${bookingId}`);
+          } catch (e) {
+            // ignore
+          }
         },
         onError: (err: any) => {
           console.error("Booking error", err);

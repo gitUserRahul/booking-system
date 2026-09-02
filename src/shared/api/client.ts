@@ -4,6 +4,7 @@ import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
 import { serviceItems } from "./mock/services.js";
 import { availability } from "./mock/availability.js";
+import { bookings } from "./mock/booking";
 
 export type ApiErrorResponse = {
   error: string;
@@ -28,8 +29,13 @@ if (isMockMode) {
 export function setupMockApi() {
   const mock = new MockAdapter(api, { delayResponse: 400 });
 
-  // in-memory store, mirrors what a real DB would hold for this session
-  const bookings: any[] = [];
+  // Return a single booking by id
+  mock.onGet(/\/bookings\/[^/]+\/?$/).reply((config) => {
+    const cleanUrl = (config.url ?? "").split("?")[0].replace(/\/$/, "");
+    const id = cleanUrl.split("/").pop();
+    const item = bookings.find((b) => String(b.id) === String(id));
+    return item ? [200, item] : [404, { error: `Booking ${id} not found` }];
+  });
 
   // Return all bookings (useful for verifying created bookings in the UI)
   mock.onGet(/\/bookings\/?$/).reply(() => [200, bookings]);
