@@ -2,6 +2,8 @@
 
 import axios from "axios";
 import MockAdapter from "axios-mock-adapter";
+import { serviceItems } from "./mock/services.js";
+import { availability } from "./mock/availability.js";
 
 export type ApiErrorResponse = {
   error: string;
@@ -27,128 +29,142 @@ export function setupMockApi() {
   const mock = new MockAdapter(api, { delayResponse: 400 });
 
   // in-memory store, mirrors what a real DB would hold for this session
-  const serviceItems = [
-    {
-      id: "svc_001",
-      name: "Home Cleaning",
-      description:
-        "Professional home cleaning service for apartments and houses.",
-      category: "Home Services",
-      provider: {
-        id: "provider_001",
-        name: "CleanPro",
+  const bookings: any[] = [];
+
+  // Return all bookings (useful for verifying created bookings in the UI)
+  mock.onGet(/\/bookings\/?$/).reply(() => [200, bookings]);
+
+  mock.onGet("/services").reply(200, serviceItems);
+
+  mock.onGet(/\/services\/[^/]+\/availability/).reply((config) => {
+    const [path, queryString] = (config.url ?? "").split("?");
+    const cleanPath = path.replace(/\/$/, "");
+    const segments = cleanPath.split("/");
+    const serviceId = segments[segments.length - 2]; // .../{id}/availability
+
+    const service = serviceItems.find(
+      (s: { id: string | number }) => String(s.id) === serviceId,
+    );
+    if (!service) {
+      return [404, { error: `Service ${serviceId} not found` }];
+    }
+
+    const params = new URLSearchParams(queryString ?? "");
+    const from = params.get("from");
+    const to = params.get("to");
+
+    const allDates = availability[serviceId] ?? {};
+    const availabilityService = Object.entries(allDates)
+      .filter(([date]) => (!from || date >= from) && (!to || date <= to))
+      .map(([date, slots]) => ({ date, slots }));
+
+    return [
+      200,
+      {
+        serviceId,
+        serviceName: service.name,
+        durationMinutes: service.durationMinutes,
+        availabilityService,
       },
-      price: 45,
-      currency: "USD",
-      durationMinutes: 90,
-      rating: 4.8,
-    },
+    ];
+  });
 
-    {
-      id: "svc_002",
-      name: "AC Repair",
-      description:
-        "Professional air conditioner inspection and repair service.",
-      category: "Repair",
-      provider: {
-        id: "provider_002",
-        name: "FixFast",
+  mock.onGet(/\/services\/.+/).reply((config) => {
+    // Clean query strings and trailing slashes
+    const cleanUrl = (config.url ?? "").split("?")[0].replace(/\/$/, "");
+    const id = cleanUrl.split("/").pop();
+
+    const item = serviceItems.find((s) => String(s.id) === id);
+
+    return item ? [200, item] : [404, { error: `Service ${id} not found` }];
+  });
+
+  mock.onPost(/\/bookings\/?$/).reply((config) => {
+    const payload = config.data ? JSON.parse(config.data) : {};
+    const {
+      serviceId,
+      date,
+      slot,
+      address,
+    }: {
+      serviceId?: string;
+      date?: string;
+      slot?: { id: string; startTime: string; endTime: string };
+      address?: string;
+    } = payload;
+
+    // 1. Validate the payload shape
+    const fieldErrors: Record<string, string> = {};
+    if (!serviceId) fieldErrors.serviceId = "Service is required";
+    if (!date) fieldErrors.date = "Please select a date";
+    if (!slot?.id) fieldErrors.slot = "Please select a time slot";
+    if (!address || !address.trim())
+      fieldErrors.address = "Address is required";
+
+    if (Object.keys(fieldErrors).length > 0) {
+      return [
+        422,
+        {
+          code: "VALIDATION_ERROR",
+          message: "Some fields need your attention",
+          fieldErrors,
+        },
+      ];
+    }
+
+    // 2. Service must exist (mirrors the availability handler's check)
+    const service = serviceItems.find(
+      (s: { id: string | number }) => String(s.id) === String(serviceId),
+    );
+    if (!service) {
+      return [404, { error: `Service ${serviceId} not found` }];
+    }
+
+    // 3. Slot must exist for that service/date and still be available
+    const dateSlots: Slot[] = availability[serviceId]?.[date as string] ?? [];
+    const matchedSlot = dateSlots.find((s) => s.id === slot!.id);
+
+    if (!matchedSlot || matchedSlot.available === false) {
+      return [
+        409,
+        {
+          code: "SLOT_UNAVAILABLE",
+          message: "That time slot is no longer available",
+          fieldErrors: {
+            slot: "This slot was just taken — please pick another",
+          },
+        },
+      ];
+    }
+
+    // 4. "Book" it — flip availability so subsequent GET availability
+    // calls reflect the change, same in-memory data the GET handler reads
+    matchedSlot.available = false;
+
+    const booking: Booking = {
+      id: `bk_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      status: "confirmed",
+      serviceId: String(serviceId),
+      serviceName: service.name,
+      date: date as string,
+      slot: {
+        id: matchedSlot.id,
+        startTime: matchedSlot.startTime,
+        endTime: matchedSlot.endTime,
       },
-      price: 60,
-      currency: "USD",
-      durationMinutes: 60,
-      rating: 4.6,
-    },
+      address: address!.trim(),
+      price:
+        service.price != null
+          ? { currency: service.currency, amount: service.price }
+          : null,
+      createdAt: new Date().toISOString(),
+    };
 
-    {
-      id: "svc_003",
-      name: "Haircut & Styling",
-      description:
-        "Professional haircut and styling service at your preferred location.",
-      category: "Beauty",
-      provider: {
-        id: "provider_003",
-        name: "StyleStudio",
-      },
-      price: 30,
-      currency: "USD",
-      durationMinutes: 45,
-      rating: 3.9,
-    },
+    bookings.push(booking);
 
-    {
-      id: "svc_004",
-      name: "Plumbing Repair",
-      description:
-        "Professional plumbing inspection and household plumbing repair.",
-      category: "Repair",
-      provider: {
-        id: "provider_004",
-        name: "HomeFix",
-      },
-      price: 55,
-      currency: "USD",
-      durationMinutes: 60,
-      rating: 2.5,
-    },
-  ];
+    return [201, booking];
+  });
 
-  mock.onGet("/api/v1/services").reply(200, serviceItems);
-
-  //   mock.onGet(/\/api\/v1\/services\/\w+/).reply((config) => {
-  //     const id = config.url!.split("/").pop();
-  //     const item = serviceItems.find((i) => i.id === id);
-  //     if (!item) {
-  //       const body: ApiErrorResponse = { error: "Service not found" };
-  //       return [404, body];
-  //     }
-  //     return [200, item];
-  //   });
-
-  //   mock.onPost("/api/v1/services").reply((config) => {
-  //     // FormData bodies come through as a real FormData instance here too —
-  //     // read fields the same way your backend would.
-  //     const form = config.data as FormData;
-  //     const name = form.get("name") as string;
-  //     const price = Number(form.get("price"));
-
-  //     if (!name) {
-  //       const body: ApiErrorResponse = {
-  //         error: "Validation failed",
-  //         details: [{ path: "name", message: "Name is required" }],
-  //       };
-  //       return [400, body];
-  //     }
-
-  //     const created = {
-  //       id: String(Date.now()),
-  //       name,
-  //       price,
-  //       category: form.get("category") as string,
-  //       available: true,
-  //       imageUrl: null,
-  //     };
-  //     serviceItems.push(created);
-  //     return [201, created];
-  //   });
-
-  //   mock.onPatch(/\/api\/v1\/services\/\w+/).reply((config) => {
-  //     const id = config.url!.split("/").pop();
-  //     const updates = JSON.parse(config.data);
-  //     serviceItems = serviceItems.map((i) =>
-  //       i.id === id ? { ...i, ...updates } : i,
-  //     );
-  //     return [200, serviceItems.find((i) => i.id === id)];
-  //   });
-
-  //   mock.onDelete(/\/api\/v1\/services\/\w+/).reply((config) => {
-  //     const id = config.url!.split("/").pop();
-  //     serviceItems = serviceItems.filter((i) => i.id !== id);
-  //     return [204];
-  //   });
-
-  // Anything not explicitly handled falls through as a 500 instead of
-  // silently hitting the real network — surfaces gaps in your mocks fast.
   mock.onAny().reply(500, {
     error: "No mock handler for this request",
   } as ApiErrorResponse);

@@ -1,6 +1,7 @@
-import Rating from "../../../shared/components/Rating";
+import Rating from "@/shared/components/Rating";
+import {Link} from "react-router-dom";
 
-const ServiceCard = ({ serviceItem }: ServiceCardProps) => {
+const ServiceCard = ({ serviceItem }) => {
   const {
     rating,
     durationMinutes,
@@ -35,6 +36,12 @@ const ServiceCard = ({ serviceItem }: ServiceCardProps) => {
           {currency} {price}
         </span>
       </div>
+      <Link
+        to={`/services/${id}/availability`}
+        className="px-4 py-2 rounded text-white transition-colors bg-blue-700 "
+      >
+        Continue to Booking
+      </Link>
     </div>
   );
 };

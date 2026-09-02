@@ -1,20 +1,14 @@
 import { useState } from "react";
 import { useServices } from "../api/useServices.ts";
+import { useDebounce } from "@/shared/hooks/useDebounce";
 import { ServiceFilter } from "../components/ServiceCategory";
+import { Link } from "react-router-dom";
 
 export function ServicesDisplay() {
   const { data, isLoading, isError, error } = useServices();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-
-  const filteredServices = data.filter((service) => {
-    const matchesCategory =
-      !selectedCategory || service.category === selectedCategory;
-    const matchesSearch = service.name
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   if (isLoading) {
     return <p>Loading services...</p>;
@@ -23,6 +17,15 @@ export function ServicesDisplay() {
   if (isError) {
     return <p>Failed to load services: {String(error)}</p>;
   }
+
+  const filteredServices = (data ?? []).filter((service) => {
+    const matchesCategory =
+      !selectedCategory || service.category === selectedCategory;
+    const matchesSearch = service.name
+      .toLowerCase()
+      .includes(debouncedSearchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
 
   return (
     <div className="flex flex-col items-center min-h-screen py-2 gap-4">
@@ -47,7 +50,7 @@ export function ServicesDisplay() {
       <ul>
         {filteredServices.map((service) => (
           <li className="text-lg font-semibold" key={service.id}>
-            {service.name}
+            <Link to={`/services/${service.id}`}>{service.name}</Link>
           </li>
         ))}
       </ul>
